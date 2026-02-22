@@ -36,7 +36,7 @@ st.sidebar.markdown("---")
 st.sidebar.header("📊 Chart Settings")
 chart_type = st.sidebar.radio(
     "Select Chart Type",
-    options=["Line Chart", "Bar Chart", "Pie Chart"],
+    options=["Bar Chart", "Pie Chart"],
     index=0,
     help="Choose how you want to visualize your data"
 )
@@ -93,17 +93,7 @@ if st.session_state.monthly_data:
     # ══════════════════════════════════════════
     st.subheader("📊 Monthly Usage & Bill Analysis")
 
-    if chart_type == "Line Chart":
-        fig = px.line(
-            df, x="Month", y=["Units", "Bill"],
-            markers=True,
-            title="Electricity Usage & Bill — Monthly Trend",
-            labels={"value": "Units (kWh) / Bill (₹)", "variable": "Metric"},
-            color_discrete_map={"Units": "#00b4d8", "Bill": "#f77f00"},
-        )
-        fig.update_traces(line=dict(width=3))
-
-    elif chart_type == "Bar Chart":
+    if chart_type == "Bar Chart":
         fig = px.bar(
             df, x="Month", y=["Units", "Bill"],
             barmode="group",
@@ -138,16 +128,7 @@ if st.session_state.monthly_data:
     # ══════════════════════════════════════════
     st.subheader("💡 Rate per Unit (₹/kWh)")
 
-    if chart_type == "Line Chart":
-        fig_rate = px.line(
-            df, x="Month", y="Rate", markers=True,
-            title="Rate per Unit — Monthly Trend",
-            labels={"Rate": "₹/kWh"},
-            color_discrete_sequence=["#7209b7"],
-        )
-        fig_rate.update_traces(line=dict(width=3))
-
-    elif chart_type == "Bar Chart":
+    if chart_type == "Bar Chart":
         fig_rate = px.bar(
             df, x="Month", y="Rate",
             title="Rate per Unit — Monthly Comparison",
@@ -185,16 +166,7 @@ if st.session_state.monthly_data:
     with c2:
         st.metric("Trees Needed to Offset", f"{trees_needed:.1f} trees/year")
 
-    if chart_type == "Line Chart":
-        fig_co2 = px.line(
-            df, x="Month", y="CO2", markers=True,
-            title="CO₂ Emissions — Monthly Trend",
-            labels={"CO2": "CO₂ (kg)"},
-            color_discrete_sequence=["#2dc653"],
-        )
-        fig_co2.update_traces(line=dict(width=3))
-
-    elif chart_type == "Bar Chart":
+    if chart_type == "Bar Chart":
         fig_co2 = px.bar(
             df, x="Month", y="CO2",
             title="CO₂ Emissions — Monthly Comparison",
@@ -240,19 +212,7 @@ if st.session_state.monthly_data:
     }])
     df_pred = pd.concat([df, pred_row], ignore_index=True)
 
-    if chart_type == "Line Chart":
-        fig_pred = px.line(
-            df_pred, x="Month", y=["Units", "Bill"], markers=True,
-            title="Actual + Predicted Next Month",
-            labels={"value": "Units (kWh) / Bill (₹)", "variable": "Metric"},
-            color_discrete_map={"Units": "#00b4d8", "Bill": "#f77f00"},
-        )
-        fig_pred.update_traces(line=dict(width=3))
-        # Highlight prediction point
-        fig_pred.add_vline(x="Next", line_dash="dash", line_color="red",
-                           annotation_text="Prediction", annotation_position="top right")
-
-    elif chart_type == "Bar Chart":
+    if chart_type == "Bar Chart":
         fig_pred = px.bar(
             df_pred, x="Month", y=["Units", "Bill"], barmode="group",
             title="Actual + Predicted Next Month",
