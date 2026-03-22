@@ -924,6 +924,69 @@ with nav_col3:
 
 
 # ─────────────────────────────────────────────
+# ROLLING ALERT BANNER — shown when usage is high
+# ─────────────────────────────────────────────
+_alert_units = st.session_state.get("saved_units", 0)
+_alert_bill  = st.session_state.get("saved_bill", 0)
+_alert_month = st.session_state.get("saved_month", "")
+_supplier_key = st.session_state.get("supplier", "MSEDCL")
+
+if _alert_units > 300:
+    if _alert_units > 500:
+        _banner_msg = (
+            f"🔴 ALERT: Very High Usage — {_alert_units:.0f} kWh in {_alert_month}! "
+            f"You are in the highest billing slab. Bill: Rs {_alert_bill:.0f}. "
+            f"Reduce usage by {_alert_units - 500:.0f} kWh to save Rs {_alert_bill - calculate_bill(500, _supplier_key)['total']:.0f} next month!  "
+            f"⚡ Check your AC, Water Heater and Washing Machine usage immediately!  "
+        )
+        _banner_color = "#ef4444"
+        _banner_bg    = "rgba(239,68,68,0.18)"
+    else:
+        _banner_msg = (
+            f"🟠 HIGH USAGE ALERT: {_alert_units:.0f} kWh in {_alert_month}. "
+            f"Bill: Rs {_alert_bill:.0f}. "
+            f"Reduce by {_alert_units - 300:.0f} kWh to save Rs {_alert_bill - calculate_bill(300, _supplier_key)['total']:.0f}!  "
+            f"⚡ You're in the high billing slab — every kWh saved now counts double!  "
+        )
+        _banner_color = "#f97316"
+        _banner_bg    = "rgba(249,115,22,0.15)"
+
+    # Repeat message to make the scroll feel continuous
+    _scroll_text = (_banner_msg + "   ·   ") * 4
+
+    st.markdown(f"""
+    <style>
+    @keyframes scrollBanner {{
+        0%   {{ transform: translateX(100%); }}
+        100% {{ transform: translateX(-100%); }}
+    }}
+    .voltiq-rolling-banner {{
+        overflow: hidden;
+        white-space: nowrap;
+        background: {_banner_bg};
+        border: 1.5px solid {_banner_color};
+        border-radius: 14px;
+        padding: 13px 0;
+        margin-bottom: 18px;
+        box-shadow: 0 0 18px {_banner_color}44;
+    }}
+    .voltiq-rolling-banner span {{
+        display: inline-block;
+        animation: scrollBanner 22s linear infinite;
+        font-size: 14px;
+        font-weight: 700;
+        color: {_banner_color};
+        letter-spacing: 0.4px;
+        font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+        padding-left: 100%;
+    }}
+    </style>
+    <div class="voltiq-rolling-banner">
+        <span>{_scroll_text}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────
 # ONBOARDING SURVEY — shown only once per user
 # ─────────────────────────────────────────────
 if st.session_state.get("show_onboarding_survey", False):
@@ -940,23 +1003,47 @@ if st.session_state.get("show_onboarding_survey", False):
     """, unsafe_allow_html=True)
 
     st.markdown("#### 🏠 Average Appliance Usage Survey")
-    st.caption("How many hours per day do you typically use each appliance? (Enter 0 if you don't have it)")
+    st.caption("For each appliance, tell us: how many you have at home, and how many hours per day you typically use them. Enter 0 if you don't have that appliance.")
 
     onboard_hours = {}
-    cols_ob = st.columns(2)
+    onboard_counts = {}
+
     for i, (appliance, wattage) in enumerate(APPLIANCES.items()):
-        with cols_ob[i % 2]:
+        st.markdown(f"""
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+          border-radius:14px;padding:16px 20px;margin:10px 0;">
+          <div style="font-family:'Syne','Segoe UI',system-ui,sans-serif;font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:10px;">
+            {appliance} <span style="font-size:12px;color:#6b7280;font-weight:400;">({wattage}W)</span>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        col_count, col_hrs = st.columns(2)
+        with col_count:
+            onboard_counts[appliance] = st.number_input(
+                f"How many {appliance}s do you have?",
+                min_value=0, max_value=20,
+                value=0, step=1,
+                key=f"onboard_count_{i}",
+                help=f"Number of {appliance} units at home"
+            )
+        with col_hrs:
             onboard_hours[appliance] = st.number_input(
-                f"{appliance} ({wattage}W)",
+                f"Hours per day used",
                 min_value=0.0, max_value=24.0,
                 value=0.0, step=0.5,
-                key=f"onboard_{i}",
-                help="Average hours per day"
+                key=f"onboard_hrs_{i}",
+                help="Average hours per day each unit runs"
             )
 
+    # Calculate effective hours = hours × count for each appliance
+    effective_hours = {
+        a: onboard_hours[a] * max(onboard_counts[a], 1 if onboard_hours[a] > 0 else 0)
+        for a in APPLIANCES
+    }
+
     total_survey_units = sum(
-        (APPLIANCES[a] * onboard_hours[a] * 30) / 1000
-        for a in APPLIANCES if onboard_hours[a] > 0
+        (APPLIANCES[a] * effective_hours[a] * 30) / 1000
+        for a in APPLIANCES if effective_hours[a] > 0
     )
     if total_survey_units > 0:
         est_survey_bill = calculate_bill(total_survey_units, st.session_state.supplier)['total']
@@ -965,8 +1052,8 @@ if st.session_state.get("show_onboarding_survey", False):
     col_save, col_skip = st.columns([3, 1])
     with col_save:
         if st.button("✅ Save & Continue", use_container_width=True, key="save_onboard_survey"):
-            save_user_survey(st.session_state.username, onboard_hours)
-            st.session_state.avg_survey_hours = onboard_hours
+            save_user_survey(st.session_state.username, effective_hours)
+            st.session_state.avg_survey_hours = effective_hours
             st.session_state.show_onboarding_survey = False
             st.success("Survey saved! You're all set.")
             st.rerun()
@@ -1423,6 +1510,36 @@ if st.session_state.page == "input":
                         <span style="font-size:13px;margin:6px 0;display:block;">{saving_text}</span>
                         <span style="font-size:12px;color:#6b7280;margin-top:3px;display:block;">💡 {row['tip']}</span>
                         </div>
+                    """, unsafe_allow_html=True)
+
+                # ── TIPS & TRICKS SECTION ──
+                st.markdown("---")
+                section_header("💡", "Tips & Tricks to Reduce Your Bill", "Personalised advice based on your appliance usage this month")
+                for row in sorted(alert_data, key=lambda x: x['Bill Saving'], reverse=True):
+                    if not row['tip']:
+                        continue
+                    tip_icon = "🔴" if "HIGH" in row['Status'] else ("🟡" if "MODERATE" in row['Status'] else "🟢")
+                    st.markdown(f"""
+                    <div style="background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.1);
+                      border-left:6px solid {row['border']};
+                      border-radius:16px;padding:22px 26px;margin:14px 0;
+                      box-shadow:0 4px 20px rgba(0,0,0,.25);">
+                      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                        <div style="font-size:26px;">{tip_icon}</div>
+                        <div>
+                          <div style="font-family:'Syne','Segoe UI',system-ui,sans-serif;font-size:18px;font-weight:800;color:#f1f5f9;letter-spacing:-.2px;">{row['Appliance']}</div>
+                          <div style="font-size:12px;color:#6b7280;margin-top:2px;">
+                            {row['Hrs/Day']} hrs/day · {row['Current Units']} kWh/month · Rs {row['Current Cost']:.0f}/month
+                          </div>
+                        </div>
+                        <div style="margin-left:auto;font-size:12px;font-weight:700;color:{row['text_color']};
+                          background:rgba(0,0,0,.25);padding:4px 14px;border-radius:20px;">{row['Status']}</div>
+                      </div>
+                      <div style="font-size:15px;color:#e2e8f0;line-height:1.7;font-weight:400;
+                        background:rgba(0,0,0,.15);border-radius:10px;padding:14px 18px;">
+                        💡 {row['tip']}
+                      </div>
+                    </div>
                     """, unsafe_allow_html=True)
         else:
             st.markdown("---")
